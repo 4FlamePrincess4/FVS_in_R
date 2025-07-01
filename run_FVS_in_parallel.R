@@ -32,6 +32,38 @@ RunDirectory <- "insert_run_directory_path_here"
 #Create the output database file path from Rachel: "database MUST exist before running FVS"
 outputDatabase <- paste0("./outputs/", run_name, ".db")
 
+#Make an outputs directory
+dir.create(paste0(RunDirectory, "/outputs"))
+
+runFVS <- function(variant, kcp, RunDirectory, fvs_bin) {
+  withr::with_dir(RunDirectory, {
+    # Load the variant DLL
+    rFVS::fvsLoad(
+      fvsProgram = paste0("FVS", variant, ".dll"),
+      bin = fvs_bin
+    )
+    
+    # Set the command line (keyword file)
+    print(paste0("--keywordfile=", kcp, "_", toupper(variant), ".key"))
+    rFVS::fvsSetCmdLine(
+      cl = paste0("--keywordfile=", kcp, "_", toupper(variant), ".key"),
+      PACKAGE = paste0("FVS", variant)
+    )
+    
+    # Run FVS until done — IMPORTANT: pass PACKAGE here too!
+    retCode <- 0
+    while (retCode == 0) {
+      retCode <- rFVS::fvsRun(PACKAGE = paste0("FVS", variant))
+    }
+  })
+  # Explicitly return useful info:
+  list(
+    variant = variant,
+    kcp = kcp,
+    status = retCode
+  )
+}
+
 #List the KCP files
 kcp_dir <- "D:/WFSETP/Scenario_Development/Chris_FVS_Runs_KCP_Effects/OkaWen_kcps_v2_Eireann_feedback"
 kcp_paths <- list.files(kcp_dir)
