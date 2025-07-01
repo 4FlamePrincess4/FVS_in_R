@@ -45,27 +45,11 @@ createInputFile <- function(stand, managementID, params_row, outputDatabase, are
     'NUMCYCLE       3\n',
     'TIMEINT         0        1\n',
     'SCREEN\n',
-    'FIRE\n',
     'DataBase\n',
     'DSNout\n', outputDatabase, '\n',
     'SUMMARY\n',
     'COMPUTDB\n',
     'CALBSTDB\n',
-
-    # ---- Fire Reports ----
-    'FMIN\n',
-    'BURNREPT\n',
-    'CanFProf\n',
-    'CarbRept\n',
-    'DWDCvOut\n',
-    'FUELREPT\n',
-    'FUELOUT\n',
-    'MORTREPT\n',
-    'POTFIRE\n',
-    'SNAGOUT\n',
-    'SNAGSUM\n',
-    'FIRECALC           0         1         2\n',
-    'END\n',
 
     # ---- Report Database Output ----
     'BURNREDB\n',
@@ -118,6 +102,21 @@ createInputFile <- function(stand, managementID, params_row, outputDatabase, are
     'FMLHERB = ', params_row$fmlherb, '\n',
     'WSPD = ', params_row$wspd_mph, '\n',
     'TEMP = ', params_row$temp_F, '\n',
+    'END\n',
+
+    # ---- Fire Reports ----
+    'FMIN\n',
+    'BURNREPT\n',
+    'CanFProf\n',
+    'CarbRept\n',
+    'DWDCvOut\n',
+    'FUELREPT\n',
+    'FUELOUT\n',
+    'MORTREPT\n',
+    'POTFIRE\n',
+    'SNAGOUT\n',
+    'SNAGSUM\n',
+    'FIRECALC           0         1         2\n',
     'END\n',
 
     # ---- Tree outputs and classification ----
