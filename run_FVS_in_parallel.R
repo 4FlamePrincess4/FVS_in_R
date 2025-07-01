@@ -1,0 +1,59 @@
+### Note: This code is meant to be paired with one of the scripts used to generate the .key files. The present version matches the generate_key_files_for_multiple_kcps_and_variants.R script
+# You may need to adjust the code to generate the variant_kcp dataframe to then reference in the future_pmap call 
+
+library(tidyverse)
+library(RSQLite)
+library(data.table)
+library(stringr)
+library(furrr)
+library(withr)
+#Install the rFVS package
+install.packages("remotes")
+remotes::install_github("SilviaTerra/rFVS")
+library(rFVS)
+
+setwd("D:/WFSETP/FVS_Training/Run_FVS")
+wd <- getwd()
+
+#Set the FVS executable folder
+fvs_bin = "C:/FVS/FVSSoftware/FVSbin"
+
+#---Set location of TMFM sqlite databases and read in data----------------------
+TMFM2020_dir_path <- "D:/WFSETP/Scenario_Development/Chris_FVS_Runs_KCP_Effects/TMFM_2020_OkaWen_Databases"
+
+okawen_dbs <- list.files(TMFM2020_dir_path,
+                         full.names=TRUE)
+#We only need to run this for the East Cascades variant
+EC_dbs <- okawen_dbs[1]
+
+# Create a dir for this run.
+RunDirectory <- "insert_run_directory_path_here"
+
+#Create the output database file path from Rachel: "database MUST exist before running FVS"
+outputDatabase <- paste0("./outputs/", run_name, ".db")
+
+#List the KCP files
+kcp_dir <- "D:/WFSETP/Scenario_Development/Chris_FVS_Runs_KCP_Effects/OkaWen_kcps_v2_Eireann_feedback"
+kcp_paths <- list.files(kcp_dir)
+
+#variants <- c("ec", "ie", "pn", "wc")
+variants <- "ec"
+kcps <- stringr::str_sub(kcp_paths, end = -5) 
+variant_kcp <- expand.grid(variant = variants, kcp = kcps)
+
+#Plan for parallel execution
+n_runs <- nrow(variant_kcp)
+future::plan(multisession, workers = 5)
+
+#Run FVS in parallel for all combinations
+furrr::future_pmap(
+  list(
+    variant = variant_kcp$variant,
+    kcp = variant_kcp$kcp
+  ),
+  runFVS,
+  RunDirectory = RunDirectory,
+  fvs_bin = fvs_bin
+)
+
+plan(sequential)
