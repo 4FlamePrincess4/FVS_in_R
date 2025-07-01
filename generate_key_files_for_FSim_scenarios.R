@@ -45,6 +45,7 @@ createInputFile <- function(stand, managementID, params_row, outputDatabase, are
     'NUMCYCLE       3\n',
     'TIMEINT         0        1\n',
     'SCREEN\n',
+    'FIRE\n',
     'DataBase\n',
     'DSNout\n', outputDatabase, '\n',
     'SUMMARY\n',
