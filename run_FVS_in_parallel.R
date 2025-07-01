@@ -45,6 +45,8 @@ runFVS <- function(variant, kcp, RunDirectory, fvs_bin) {
     
     # Set the command line (keyword file)
     print(paste0("--keywordfile=", kcp, "_", toupper(variant), ".key"))
+    #For FSim scenario runs
+    # print(paste0("--keywordfile=", kcp, "_", flame_length, "_", toupper(variant), ".key")) #adjust path below similarly
     rFVS::fvsSetCmdLine(
       cl = paste0("--keywordfile=", kcp, "_", toupper(variant), ".key"),
       PACKAGE = paste0("FVS", variant)
@@ -73,6 +75,12 @@ variants <- "ec"
 kcps <- stringr::str_sub(kcp_paths, end = -5) 
 variant_kcp <- expand.grid(variant = variants, kcp = kcps)
 
+##For FSim scenarios
+# variants <- "ec"
+# kcps <- "simfire_hardcoded"
+# flame_lengths <- c(1, 3, 5, 7, 10, 20)
+# runs <- expand.grid(variant = variants, kcp = kcps, flame_length = flame_lengths)
+
 #Plan for parallel execution
 n_runs <- nrow(variant_kcp)
 ##NOTE: if n_runs exceeds the number of logical processors on your machine, set the workers equal to the number of logical processors. Setting the number of workers too high may crash R.
@@ -83,6 +91,7 @@ furrr::future_pmap(
   list(
     variant = variant_kcp$variant,
     kcp = variant_kcp$kcp
+    #flame_length=runs$flame_length #Use this for FSim scenario runs with the above code to create the runs grid
   ),
   runFVS,
   RunDirectory = RunDirectory,
