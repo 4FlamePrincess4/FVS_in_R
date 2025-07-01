@@ -39,12 +39,12 @@ runFVS <- function(variant, kcp, RunDirectory, fvs_bin) {
   withr::with_dir(RunDirectory, {
     # Load the variant DLL
     rFVS::fvsLoad(
-      fvsProgram = paste0("FVS", variant, ".dll"),
+      fvsProgram = paste0("FVS", variant, ".dll"), #the dll files have lowercase variant labels
       bin = fvs_bin
     )
     
     # Set the command line (keyword file)
-    print(paste0("--keywordfile=", kcp, "_", toupper(variant), ".key"))
+    print(paste0("--keywordfile=", kcp, "_", toupper(variant), ".key")) #the database has uppercase variant labels, which are used to generate the .key files
     #For FSim scenario runs
     # print(paste0("--keywordfile=", kcp, "_", flame_length, "_", toupper(variant), ".key")) #adjust path below similarly
     rFVS::fvsSetCmdLine(
@@ -58,7 +58,7 @@ runFVS <- function(variant, kcp, RunDirectory, fvs_bin) {
       retCode <- rFVS::fvsRun(PACKAGE = paste0("FVS", variant))
     }
   })
-  # Explicitly return useful info:
+  # Return useful info:
   list(
     variant = variant,
     kcp = kcp,
