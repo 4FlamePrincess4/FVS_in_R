@@ -40,6 +40,7 @@ createInputFile <- function(stand, managementID, FL, outputDatabase, areaSpecifi
                   '\nNUMCYCLE       3\n',
                   'TIMEINT         0        1\n',
                   'SCREEN\n',
+                  'FIRE\n',
                   'DataBase\n',
                   'DSNout\n',
                   outputDatabase, '\n',
