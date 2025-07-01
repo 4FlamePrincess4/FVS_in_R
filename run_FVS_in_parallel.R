@@ -43,7 +43,8 @@ variant_kcp <- expand.grid(variant = variants, kcp = kcps)
 
 #Plan for parallel execution
 n_runs <- nrow(variant_kcp)
-future::plan(multisession, workers = 5)
+##NOTE: if n_runs exceeds the number of logical processors on your machine, set the workers equal to the number of logical processors. Setting the number of workers too high may crash R.
+future::plan(multisession, workers = n_runs)
 
 #Run FVS in parallel for all combinations
 furrr::future_pmap(
