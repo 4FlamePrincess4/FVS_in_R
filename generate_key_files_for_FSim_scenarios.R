@@ -27,7 +27,11 @@ FSim_scenarios <- data.frame(
   flame_length = c(1, 3, 5, 7, 10, 20),
   fm1 = c(8, 7, 6, 5, 4, 3),
   fm10 = c(8, 7, 6, 5, 4, 4),
-  # other variables like fm100, fm1000, fmduff, etc.
+  fm100 = c(10, 9, 8, 7, 6, 5),
+  fm1000 = c(15, 13, 11, 10, 8, 6),
+  fmduff = c(50, 45, 40, 30, 20, 15),
+  fmlwood = c(110, 100, 90, 80, 60, 50),
+  fmlherb = c(110, 100, 90, 70, 40, 40),
   wspd_mph = c(2, 4, 4, 6, 7, 10),
   temp_F = c(85, 85, 85, 90, 90, 90),
   mortality = rep(1, 6),
@@ -49,7 +53,7 @@ createInputFile <- function(stand, managementID, params_row, outputDatabase, are
     'SUMMARY\n',
     'COMPUTDB\n',
     'CALBSTDB\n',
-
+    
     # ---- Report Database Output ----
     'BURNREDB\n',
     'CARBREDB\n',
@@ -64,7 +68,7 @@ createInputFile <- function(stand, managementID, params_row, outputDatabase, are
     'CutLiDB           2         2\n',
     'TreeLiDB          2         2\n',
     'End\n',
-
+    
     # ---- Input DB Queries ----
     'DATABASE\n',
     'DSNIN\n', inputDatabase, '\n',
@@ -79,7 +83,7 @@ createInputFile <- function(stand, managementID, params_row, outputDatabase, are
     "WHERE Stand_ID = '%stand_cn%')\n",
     'EndSQL\n',
     'END\n',
-
+    
     # ---- COMPUTE block with scenario inputs ----
     'COMPUTE            0\n',
     'SEV_FL = POTFLEN(1)\n',
@@ -101,8 +105,11 @@ createInputFile <- function(stand, managementID, params_row, outputDatabase, are
     'FMLHERB = ', params_row$fmlherb, '\n',
     'WSPD = ', params_row$wspd_mph, '\n',
     'TEMP = ', params_row$temp_F, '\n',
+    'MORTALITY = ', params_row$mortality, '\n',
+    'PER_STAND_BURNED = ', params_row$per_stand_burned, '\n',
+    'SEASON = ', params_row$season, '\n',
     'END\n',
-
+    
     # ---- Fire Reports ----
     'FMIN\n',
     'BURNREPT\n',
@@ -116,21 +123,6 @@ createInputFile <- function(stand, managementID, params_row, outputDatabase, are
     'SNAGOUT\n',
     'SNAGSUM\n',
     'FIRECALC           0         1         2\n',
-    'END\n',
-
-    # ---- Tree outputs and classification ----
-    'TreeList        1\n',
-    'TreeList        2\n',
-    'CALBSTAT\n',
-    'CutList\n',
-    'STRCLASS           1     30.00        5.       16.     20.00       50.     35.00\n',
-
-    # ---- ADDFILE links to shared .kcp ----
-    'OPEN              81\n',
-    areaSpecificKcp, '\n',
-    'ADDFILE           81\n',
-    'CLOSE             81\n',
-
     # ---- SIMFIRE line from scenario ----
     'SIMFIRE           1        ',
     params_row$wspd_mph, '                ',
@@ -138,53 +130,85 @@ createInputFile <- function(stand, managementID, params_row, outputDatabase, are
     params_row$mortality, '       ',
     params_row$per_stand_burned, '         ',
     params_row$season, '\n',
-
+    'END\n',
+    
+    # ---- Tree outputs and classification ----
+    'TreeList        1\n',
+    'TreeList        2\n',
+    'CALBSTAT\n',
+    'CutList\n',
+    'STRCLASS           1     30.00        5.       16.     20.00       50.     35.00\n',
+    
+    # ---- ADDFILE links to shared .kcp ----
+    'OPEN              81\n',
+    areaSpecificKcp, '\n',
+    'ADDFILE           81\n',
+    'CLOSE             81\n',
+    
     'Process\n\n'
   )
 }
 
 #Write keywords function using the above createInputFile function, iterating over FSim scenarios
-write_keywords <- function(database_path, FSim_scenarios, kcp_path) {
-  con <- dbConnect(SQLite(), database_path)
-  standinit <- dbReadTable(con, "FVS_STANDINIT")
-  dbDisconnect(con)
+plan(multisession, workers = parallel::detectCores() - 1) 
 
-  for (i in seq_len(nrow(FSim_scenarios))) {
-    row <- FSim_scenarios[i, ]
+write_keywords_parallel <- function(database_path, FSim_scenarios, kcp_path) {
+  # Load stand data once
+  con <- DBI::dbConnect(RSQLite::SQLite(), database_path)
+  standinit <- DBI::dbReadTable(con, "FVS_STANDINIT")
+  DBI::dbDisconnect(con)
+  
+  # Create scenario-specific .key and .in files in parallel
+  future_pmap(FSim_scenarios, function(...){
+    row <- list(...)
+    
     fl_label <- paste0("FL", row$flame_length)
-
+    scenario_id <- paste0("Scenario_", fl_label)
+    
+    key_text_all <- character()
+    
     for (j in seq_len(nrow(standinit))) {
       stand <- standinit$Stand_ID[j]
       variant <- standinit$Variant[j]
-      key_name <- paste0(stand, "_", fl_label, "_", variant)
+      key_name <- paste0(fl_label, "_", variant)
       out_db <- paste0("./outputs/", key_name, ".db")
-
-      keywords <- createInputFile(
-        stand = stand,
-        managementID = key_name,
-        params_row = row,
-        outputDatabase = out_db,
-        areaSpecificKcp = kcp_path,
-        inputDatabase = database_path
+      
+      key_text_all <- c(
+        key_text_all,
+        createInputFile(
+          stand = stand,
+          managementID = key_name,
+          params_row = row,
+          outputDatabase = out_db,
+          areaSpecificKcp = kcp_path,
+          inputDatabase = database_path
+        )
       )
-
-      key_file <- file.path(RunDirectory, paste0(key_name, ".key"))
-      in_file <- file.path(RunDirectory, paste0(key_name, ".in"))
-      
-      writeLines(keywords, key_file)
-      
-      fvs_in <- paste0(
-        key_name, ".key\n",
-        key_name, ".fvs\n",
-        key_name, ".out\n",
-        key_name, ".trl\n",
-        key_name, ".sum\n"
-      )
-      
-      writeLines(fvs_in, in_file)
     }
-  }
+    
+    # Append STOP
+    key_text_all <- c(key_text_all, "STOP\n")
+    
+    # Write output
+    key_file <- file.path(RunDirectory, paste0(scenario_id, ".key"))
+    in_file <- file.path(RunDirectory, paste0(scenario_id, ".in"))
+    
+    writeLines(key_text_all, key_file)
+    
+    fvs_in <- paste0(
+      scenario_id, ".key\n",
+      scenario_id, ".fvs\n",
+      scenario_id, ".out\n",
+      scenario_id, ".trl\n",
+      scenario_id, ".sum\n"
+    )
+    
+    writeLines(fvs_in, in_file)
+  })
 }
 
 #Write the .key files using the above functions
-write_keywords(EC_dbs, FSim_scenarios, kcp_path)
+write_keywords_parallel(EC_dbs, FSim_scenarios, kcp_path)
+
+#Reset parallel backend
+plan(sequential)
