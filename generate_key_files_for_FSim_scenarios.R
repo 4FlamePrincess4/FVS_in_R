@@ -1,6 +1,6 @@
-library(tidyverse)
-library(RSQLite)
-library(data.table)
+library(tidyverse) #For data manipulation
+library(RSQLite) #For working with sqlite databases
+library(data.table) #Faster data format, works with default R dataframe functions
 
 #---Set location of TMFM sqlite databases and read in data----------------------
 TMFM2020_dir_path <- "D:/WFSETP/Scenario_Development/Chris_FVS_Runs_KCP_Effects/TMFM_2020_OkaWen_Databases"
