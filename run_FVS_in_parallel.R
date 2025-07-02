@@ -1,12 +1,14 @@
 ### Note: This code is meant to be paired with one of the scripts used to generate the .key files. The present version matches the generate_key_files_for_multiple_kcps_and_variants.R script
 # You may need to adjust the code to generate the variant_kcp dataframe to then reference in the future_pmap call 
 
-library(tidyverse)
-library(RSQLite)
-library(data.table)
-library(stringr)
-library(furrr)
-library(withr)
+library(tidyverse) #For data manipulation
+library(RSQLite) #For working with sqlite databases
+library(terra) #For raster and vector geospatial operations
+library(data.table) #Faster data format, works with default R dataframe functions
+library(foreign) #For reading in .dbf files
+library(furrr) #For parallelization
+library(withr) #For parallelization - used to temporarily change the working directory for each worker
+
 #Install the rFVS package
 install.packages("remotes")
 remotes::install_github("SilviaTerra/rFVS")
