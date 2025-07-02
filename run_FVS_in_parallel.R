@@ -5,7 +5,6 @@ library(tidyverse) #For data manipulation
 library(RSQLite) #For working with sqlite databases
 library(terra) #For raster and vector geospatial operations
 library(data.table) #Faster data format, works with default R dataframe functions
-library(foreign) #For reading in .dbf files
 library(furrr) #For parallelization
 library(withr) #For parallelization - used to temporarily change the working directory for each worker
 
