@@ -29,7 +29,7 @@ FSim_scenarios <- data.frame(
   fm1 = c(8, 7, 6, 5, 4, 3),
   fm10 = c(8, 7, 6, 5, 4, 4),
   # other variables like fm100, fm1000, fmduff, etc.
-  wspd_mph = c(2, 2, 4, 6, 7, 10),
+  wspd_mph = c(2, 4, 4, 6, 7, 10),
   temp_F = c(85, 85, 85, 90, 90, 90),
   mortality = rep(1, 6),
   per_stand_burned = c(70, 80, 90, 90, 100, 100),
