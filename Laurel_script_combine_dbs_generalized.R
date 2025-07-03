@@ -27,9 +27,13 @@ combine_dbs_general <- function(RunDirectory, rm.files = FALSE, output_db_name =
     #For each table name, try to read it from the current database
     tbls <- lapply(all_table_names, function(tbl) {
       df <- tryCatch(dbReadTable(con, tbl), error = function(e) NULL) #Read the table or return NULL
-      if (!is.null(df)) {
+      if (!is.null(df) && nrow(df) > 0) {
         df$db <- db_label  #Add a new column with the source database label to track which entries came from which database
       }
+      if (!is.null(df) && nrow(df) == 0) {
+        message("Note: Table '", tbl, "' in '", db_label, "' is empty.")
+      }
+      
       df
     })
     names(tbls) <- all_table_names #Name the list entries by table name
