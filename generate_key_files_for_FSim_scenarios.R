@@ -160,9 +160,9 @@ write_keywords_parallel <- function(database_path, FSim_scenarios, kcp_path) {
   
   # Create scenario-specific .key and .in files in parallel
   future_pmap(FSim_scenarios, function(...){
-    row <- list(...)
+    inputs <- list(...)
     
-    fl_label <- paste0("FL", row$flame_length)
+    fl_label <- paste0("FL", inputs$flame_length)
     scenario_id <- paste0("Scenario_", fl_label)
     
     key_text_all <- character()
@@ -178,7 +178,7 @@ write_keywords_parallel <- function(database_path, FSim_scenarios, kcp_path) {
         createInputFile(
           stand = stand,
           managementID = key_name,
-          params_row = row,
+          params_row = inputs,
           outputDatabase = out_db,
           areaSpecificKcp = kcp_path,
           inputDatabase = database_path
