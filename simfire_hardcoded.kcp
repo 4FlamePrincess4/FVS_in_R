@@ -38,7 +38,7 @@ FMIN
 !! Fuel moisture by size class
 MOISTURE          1      FM1    FM10   FM100   FM1000   FMDUFF   FMLWOOD  FMLHERB
 !! Flame adjustment inputs from COMPUTE: FLEN, CPC, HS_
-FLAMEADJ          1     PARMS(1.0, FLEN, CPC, HS_)
+FLAMEADJ          FIREYEAR     PARMS(1.0, FLEN, CPC, HS_)
 !! Fire behavior: wind, temp, mortality, percent stand burned, season — from COMPUTE variables
-SIMFIRE           1     WSPD   TEMP    FVS_MORT  FVSpBURN   FVS_SEAS
+SIMFIRE           FIREYEAR     WSPD   TEMP    FVS_MORT  FVSpBURN   FVS_SEAS
 END
