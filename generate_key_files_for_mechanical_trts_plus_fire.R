@@ -121,7 +121,7 @@ createInputFile <- function(stand, managementID, params_row, outputDatabase, tre
     'FMDUFF = ', params_row$fmduff, '\n',
     'FMLWOOD = ', params_row$fmlwood, '\n',
     'FMLHERB = ', params_row$fmlherb, '\n',
-    'FIREYEAR = ', params_row$fire_year, '\n',
+    'FIR_YEAR = ', params_row$fire_year, '\n',
     'WSPD = ', params_row$wspd_mph, '\n',
     'TEMP = ', params_row$temp_F, '\n',
     'FVS_MORT = ', params_row$mortality, '\n',
