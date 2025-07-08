@@ -32,6 +32,7 @@ FSim_scenarios <- data.frame(
   fmduff = c(50, 45, 40, 30, 20, 15),
   fmlwood = c(110, 100, 90, 80, 60, 50),
   fmlherb = c(110, 100, 90, 70, 40, 40),
+  fire_year = rep(4, 6),
   wspd_mph = c(2, 4, 4, 6, 7, 10),
   temp_F = c(85, 85, 85, 90, 90, 90),
   mortality = rep(1, 6),
@@ -103,6 +104,7 @@ createInputFile <- function(stand, managementID, params_row, outputDatabase, are
     'FMDUFF = ', params_row$fmduff, '\n',
     'FMLWOOD = ', params_row$fmlwood, '\n',
     'FMLHERB = ', params_row$fmlherb, '\n',
+    'FIREYEAR = ', params_row$fire_year, '\n',
     'WSPD = ', params_row$wspd_mph, '\n',
     'TEMP = ', params_row$temp_F, '\n',
     'MORTALITY = ', params_row$mortality, '\n',
@@ -123,14 +125,6 @@ createInputFile <- function(stand, managementID, params_row, outputDatabase, are
     'SNAGOUT\n',
     'SNAGSUM\n',
     'FIRECALC           0         1         2\n',
-    # ---- SIMFIRE line from scenario ----
-    'SIMFIRE           1        ',
-    params_row$wspd_mph, '                ',
-    params_row$temp_F, '        ',
-    params_row$mortality, '       ',
-    params_row$per_stand_burned, '         ',
-    params_row$season, '\n',
-    'END\n',
     
     # ---- Tree outputs and classification ----
     'TreeList        1\n',
