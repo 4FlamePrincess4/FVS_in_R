@@ -82,7 +82,6 @@ log_session_info <- function(script_name = NULL, log_file = "session_log.txt") {
 
 log_session_info()
 
-#Create a table of FSim fire scenario parameters (flame lengths and associated fuel moisture and weather conditions)
 FSim_scenarios <- data.frame(
   flame_length = c(1, 3, 5, 7, 10, 20),
   fm1 = c(8, 7, 6, 5, 4, 3),
@@ -94,6 +93,7 @@ FSim_scenarios <- data.frame(
   fmlherb = c(110, 100, 90, 70, 40, 40),
   fire_year = rep(4, 6),
   wspd_mph = c(2, 4, 4, 6, 7, 10),
+  moisture = rep("",6),
   temp_F = c(85, 85, 85, 90, 90, 90),
   mortality = rep(1, 6),
   per_stand_burned = c(70, 80, 90, 90, 100, 100),
@@ -110,10 +110,10 @@ create_fire_kcp_files <- function(params_df, output_dir = "./fire_kcps", base_fi
     kcp_text <- paste0(
       "!! Auto-generated fire KCP file based on scenario ", i, "\n",
       "!! Variables hard-coded from parameters\n\n",
-
+      
       "*Keyword | Field 1 | Field 2 | Field 3 | Field 4 | Field 5 | Field 6 | Field 7 |\n",
       "* -------+---------+---------+---------+---------+---------+---------+---------+\n",
-
+      
       "COMPUTE           0\n",
       "FLEN = ", p$flame_length, "\n",
       "CPC = 0  \n",
@@ -169,12 +169,12 @@ create_fire_kcp_files(FSim_scenarios)
 #Paths to kcps
 fire_kcps <- list.files(paste0(RunDirectory, "/fire_kcps"), full.names = TRUE)
 
-createInputFile_no_trt_fire <- function(stand, managementID, params_row, outputDatabase, areaSpecificKcp, inputDatabase) {
+createInputFile_no_trt_fire <- function(stand, managementID, params_row, outputDatabase, fire_kcp, inputDatabase) {
   paste0(
     'STDIDENT\n', stand, '\n',
     'STANDCN\n', stand, '\n',
     'MGMTID\n', managementID, '\n',
-    'NUMCYCLE       4\n',
+    'NUMCYCLE        4\n',
     'TIMEINT         0        1\n',
     'SCREEN\n',
     'DataBase\n',
@@ -224,20 +224,6 @@ createInputFile_no_trt_fire <- function(stand, managementID, params_row, outputD
     'CBH = crbaseht\n',
     'CBD = crbulkdn\n',
     'YR = year\n',
-    'FLEN = ', params_row$flame_length, '\n',
-    'FM1 = ', params_row$fm1, '\n',
-    'FM10 = ', params_row$fm10, '\n',
-    'FM100 = ', params_row$fm100, '\n',
-    'FM1000 = ', params_row$fm1000, '\n',
-    'FMDUFF = ', params_row$fmduff, '\n',
-    'FMLWOOD = ', params_row$fmlwood, '\n',
-    'FMLHERB = ', params_row$fmlherb, '\n',
-    'FIR_YEAR = ', params_row$fire_year, '\n',
-    'WSPD = ', params_row$wspd_mph, '\n',
-    'TEMP = ', params_row$temp_F, '\n',
-    'FVS_MORT = ', params_row$mortality, '\n',
-    'FVSpBURN = ', params_row$per_stand_burned, '\n',
-    'FVS_SEAS = ', params_row$season, '\n',
     'END\n',
     
     # ---- Fire Reports ----
@@ -252,7 +238,7 @@ createInputFile_no_trt_fire <- function(stand, managementID, params_row, outputD
     'POTFIRE\n',
     'SNAGOUT\n',
     'SNAGSUM\n',
-    'FIRECALC           3\n',
+    'FIRECALC           4\n',
     'END\n',
     
     # ---- Tree outputs and classification ----
@@ -261,33 +247,49 @@ createInputFile_no_trt_fire <- function(stand, managementID, params_row, outputD
     'TreeList        3\n',
     'CALBSTAT\n',
     'CutList\n',
-    'STRCLASS           1     30.00        5.       16.     20.00       50.     35.00\n',
+    'STRCLASS          1         30.00     5.        16.       20.00     50.       35.00\n',
     
-    # # ---- CYCLE block to apply fire .kcp in year 4 (cycle 3) ----
+    # Add in fire kcps
     'OPEN              81\n',
     fire_kcp, '\n',
     'ADDFILE           81\n',
     'CLOSE             81\n',
-    'END\n',
     
     'Process\n\n'
   )
 }
 
-write_keywords_parallel <- function(database_path, FSim_scenarios, kcp_path) {
+write_keywords_parallel <- function(database_path, FSim_scenarios, kcp_paths) {
   # Load stand data once
   con <- DBI::dbConnect(RSQLite::SQLite(), database_path)
   standinit <- DBI::dbReadTable(con, "FVS_STANDINIT")
   DBI::dbDisconnect(con)
   
+  fire_kcp_df <- data.frame(
+    flame_length = as.numeric(gsub("[^0-9]", "", basename(fire_kcps))),
+    fire_kcp = fire_kcps
+  )
+  
+  run_matrix <- dplyr::left_join(FSim_scenarios, fire_kcp_df, by = "flame_length")
+  
+  #Use future_pmap to parallelize across each row
+  plan(multisession, workers = 20)
+  
   # Create scenario-specific .key and .in files in parallel
-  future_pmap(FSim_scenarios, function(...){
+  future_pmap(run_matrix, function(...){
     inputs <- list(...)
     
     fl_label <- paste0("FL", inputs$flame_length)
     scenario_id <- paste0("Scenario_", fl_label)
     
     key_text_all <- character()
+    
+    #Subset just the parameters from the inputs
+    params_row <- inputs[c(
+      "flame_length", "fm1", "fm10", "fm100", "fm1000",
+      "fmduff", "fmlwood", "fmlherb", "wspd_mph", 
+      "temp_F", "mortality", "per_stand_burned", "season"
+    )]
     
     for (j in seq_len(nrow(standinit))) {
       stand <- standinit$Stand_ID[j]
@@ -300,9 +302,9 @@ write_keywords_parallel <- function(database_path, FSim_scenarios, kcp_path) {
         createInputFile_no_trt_fire(
           stand = stand,
           managementID = key_name,
-          params_row = inputs,
+          params_row = params_row,
           outputDatabase = out_db,
-          areaSpecificKcp = kcp_path,
+          fire_kcp = inputs$fire_kcp,
           inputDatabase = database_path
         )
       )
@@ -330,24 +332,28 @@ write_keywords_parallel <- function(database_path, FSim_scenarios, kcp_path) {
 }
 
 #Write the scenario .key files in parallel
-#plan(multisession, workers = parallel::detectCores() - 1) 
-plan(multisession, workers = 12)
-write_keywords_parallel(EC_dbs, FSim_scenarios, fire_kcp)
+write_keywords_parallel(EC_dbs, FSim_scenarios, fire_kcps)
 #Reset parallel backend
 plan(sequential)
 
 #Create the data frame of run scenario parameters to parallelize over
 #The number of rows is the number of FVS runs you're doing
 variants <- "ec"
-kcps <- "simfire_hardcoded"
+fire_scenarios <- list.files("./fire_kcps")
+fire_scenarios <- stringr::str_sub(fire_scenarios, end = -5)
 flame_lengths <- c(1, 3, 5, 7, 10, 20)
-runs <- expand.grid(variant = variants, kcp = kcps, flame_length = flame_lengths)
+runs <- expand.grid(variant = variants, flame_length = flame_lengths)
+fire_kcp_df <- data.frame(
+  flame_length = as.numeric(gsub("[^0-9]", "", basename(fire_kcps))),
+  fire_kcp = fire_kcps
+)
+runs <- dplyr::left_join(runs, fire_kcp_df, by = "flame_length")
 print(runs)
 
 #Make an outputs directory
 dir.create(paste0(RunDirectory, "/outputs"))
 
-runFVS <- function(variant, kcp, flame_length, RunDirectory, fvs_bin) {
+runFVS <- function(variant, fire_kcp, flame_length, RunDirectory, fvs_bin) {
   withr::with_dir(RunDirectory, {
     # Load the variant DLL
     rFVS::fvsLoad(
@@ -372,18 +378,19 @@ runFVS <- function(variant, kcp, flame_length, RunDirectory, fvs_bin) {
   list(
     variant = variant,
     flame_length = flame_length,
+    fire_kcp = fire_kcp,
     status = retCode
   )
 }
 
 #n_runs <- nrow(runs)
-future::plan(multisession, workers = 30)
+future::plan(multisession, workers = 25)
 
 #Run FVS in parallel for all combinations
 furrr::future_pmap(
   list(
     variant = runs$variant,
-    kcp = runs$kcp,
+    fire_kcp = runs$fire_kcp,
     flame_length=runs$flame_length
   ),
   runFVS,
@@ -392,6 +399,7 @@ furrr::future_pmap(
 )
 
 plan(sequential)
+gc()
 
 combine_dbs_general <- function(RunDirectory, rm.files = FALSE, output_db_name = "Full_Set_FVSOut.db") {
   #List all the .db files in the directory, excluding the final merged output if it already exists
