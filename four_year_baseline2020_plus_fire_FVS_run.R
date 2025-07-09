@@ -100,7 +100,7 @@ FSim_scenarios <- data.frame(
   season = rep(3, 6)
 )
 
-                            create_fire_kcp_files <- function(params_df, output_dir = "./fire_kcps", base_filename = "FlameAdjust") {
+create_fire_kcp_files <- function(params_df, output_dir = "./fire_kcps", base_filename = "FlameAdjust") {
   if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
   
   for (i in seq_len(nrow(params_df))) {
