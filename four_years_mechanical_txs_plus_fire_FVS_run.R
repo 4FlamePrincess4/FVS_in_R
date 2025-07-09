@@ -37,6 +37,53 @@ dir.create(RunDirectory)
 
 setwd(paste0(RunDirectory))
 
+#Save the session information to record which R script was used, when, and with which package versions, to do the run
+#Generated with ChatGPT
+log_session_info <- function(script_name = NULL, log_file = "session_log.txt") {
+  # Get date
+  current_date <- Sys.Date()
+  
+  # Get session info (only package names and versions)
+  pkg_info <- sessionInfo()$otherPkgs
+  pkg_versions <- sapply(pkg_info, function(pkg) paste(pkg$Package, pkg$Version))
+  
+  # Determine script name
+  if (is.null(script_name)) {
+    script_name <- tryCatch({
+      # Try commandArgs() for command-line execution
+      args <- commandArgs(trailingOnly = FALSE)
+      script_path <- sub("--file=", "", args[grep("--file=", args)])
+      if (length(script_path) > 0) {
+        basename(script_path)
+      } else if (requireNamespace("rstudioapi", quietly = TRUE) &&
+                 rstudioapi::isAvailable()) {
+        # If in RStudio, use the active document name
+        rstudioapi::getActiveDocumentContext()$path |>
+          basename()
+      } else {
+        "Unknown_Script"
+      }
+    }, error = function(e) "Unknown_Script")
+  }
+  
+  # Compose the log text
+  log_text <- c(
+    paste0("Date: ", current_date),
+    paste0("Script: ", script_name),
+    "Package Versions:",
+    pkg_versions,
+    ""  # Blank line for spacing
+  )
+  
+  # Write to file (append mode)
+  con <- file(log_file, open = "a")  # Open in append mode
+  writeLines(log_text, con = con)
+  close(con)
+}
+
+log_session_info()
+
+#Create the fire parameters dataframe
 FSim_scenarios <- data.frame(
   flame_length = c(1, 3, 5, 7, 10, 20),
   fm1 = c(8, 7, 6, 5, 4, 3),
@@ -65,48 +112,19 @@ create_fire_kcp_files <- function(params_df, output_dir = "./fire_kcps", base_fi
     kcp_text <- paste0(
       "!! Auto-generated fire KCP file based on scenario ", i, "\n",
       "!! Variables hard-coded from parameters\n\n",
-      
-      "!! Legacy comments: significantly modified by AJM 12/22/10, modified April 2011\n",
-      "!! Crown Percent consumed being modified so that it is no longer all-or-nothing\n",
-      "!! (i.e. heretofore, CPC was 100% if FL was > FLCRIT, and 0 if FL was < CRITFL\n",
-      "!! this new method sets CPC to 0.1 when FL=CRITFL and maxes it out to 100% when FL=30% of top ht.\n",
-      "!! FL_ is flame length in feet and is set to the midpoint of the class.\n",
-      "!! FLCLASS is an integer 1-20, assumed to be FL in 0.5 m increments (e.g. FLCLASS 10=5 meter\n",
-      "!! the midpoint of the class 4.5-5.0 meters is 4.75 m = 15.58'\n\n",
-      
-      "!! FOR % Crowning:\n",
-      "!! 1) calculate linear function defined by 2 x,y points (where x= FL, y=% crown consumed)such that\n",
-      "!!    x1,y1 = crit FL, 0.1\n",
-      "!!    x2,y2 = 30% of top ht, 1.0\n",
-      "!! 2) transform y values to SQRT(y)\n",
-      "!! 3) range of y (proportion consumed) is now 0.316 (when FL=crit FL) to 100% (when FL= 30% of top ht)\n",
-      "!!    The function is concave downward.\n",
-      "* FL is the variable being incremented\n\n",
-      
+
       "*Keyword | Field 1 | Field 2 | Field 3 | Field 4 | Field 5 | Field 6 | Field 7 |\n",
       "* -------+---------+---------+---------+---------+---------+---------+---------+\n",
-      "!! note: variable FLCLASS is assigned by ArcFuels keywriter via Landscape-->FVS Analysis-->FLP Specific\n\n",
-      
-      "COMPUTE           1\n",
-      "TmpHt2Lv = -1\n",
-      "TmpCBD = -1\n",
-      "END\n\n",
-      
-      "COMPUTE           0\n\n",
+
+      "COMPUTE           0\n",
       "FLEN = ", p$flame_length, "\n",
-      
-      "!! CPC is initially set to zero to be used if stands have very low CBD\n",
-      "CPC = 0  \n\n",
-      
+      "CPC = 0  \n",
       "PCHt2Lv = TmpHt2Lv\n",
-      "!! this required COMPUTE is done elsewhere in arcfuels--> CBH=CRBASEHT\n",
-      "TmpHt2Lv = CBH\n\n",
-      
+      "CBH=CRBASEHT\n",
+      "TmpHt2Lv = CBH\n",
       "PCCBD=TmpCBD\n",
-      "!!THIS REQUIRED COMPUTE IS DONE ELSEWHERE IN ARCFUELS : --> CBD=CRBULKDN\n",
-      "TmpCBD = CBD\n\n",
-      
-      "!! SCORCH HEIGHT: convert flame length to scorch height using Van Wagner\n",
+      "CBD=CRBULKDN\n",
+      "TmpCBD=CBD\n",
       "HSM = 6.026 * (FLEN / 3.2808) ** 1.4466\n",
       "HS_ = HSM * 3.2808\n",
       "END\n\n",
@@ -116,28 +134,14 @@ create_fire_kcp_files <- function(params_df, output_dir = "./fire_kcps", base_fi
       "THEN\n",
       "COMPUTE           0\n",
       "Io_ = (0.010 * PCHt2Lv * 0.3048 * (460.0 + 25.9 * 100)) ** (3 / 2)\n",
-      "FLCRIT = (0.07749 * Io_ ** 0.46) * 3.281\n\n",
-      
+      "FLCRIT = (0.07749 * Io_ ** 0.46) * 3.281\n",
       "FLCRIT2 = 0.3 * BTOPHT\n",
       "FSLOPE = 0.9 / (FLCRIT2 - FLCRIT)\n",
-      "NTERCEPT = 1.0 - (FSLOPE * FLCRIT2)\n\n",
-      
-      "!! INTERCEPT MAY BE NEGATIVE, HENCE Y_ MAY BE NEGATIVE AT LOW FLENs\n",
-      "!! HENCE CONSTRAIN Y_ TO BE NO SMALLER THAN ZERO\n\n",
-      
-      "Y_ = MAX((FLEN * FSLOPE + NTERCEPT), 0.0)\n\n",
-      
-      "YSQRT = SQRT(Y_)\n\n",
-      
-      "!! find out where FLEN is in relation to FLCRIT\n",
-      "!! if FLEN is less than CFL, then CFL is > FLEN, set CPC to zero\n",
-      "!! else use the function and bound it to a max of 1\n\n",
-      
+      "NTERCEPT = 1.0 - (FSLOPE * FLCRIT2)\n",
+      "Y_ = MAX((FLEN * FSLOPE + NTERCEPT), 0.0)\n",
+      "YSQRT = SQRT(Y_)\n",
       "fplace = maxindex(FLEN, FLCRIT)\n",
-      "CPC = INDEX(fplace,MIN(YSQRT,1),0)\n\n",
-      
-      "FDIFF = FLEN - FLCRIT\n",
-      "!! CPC = LININT(FDIFF,0,0,0,100)\n",
+      "CPC = (INDEX(fplace, MIN(YSQRT, 1), 0)) * 100\n",
       "Done = 1\n",
       "END\n",
       "ENDIF\n\n",
@@ -260,7 +264,6 @@ createInputFile <- function(stand, managementID, params_row, outputDatabase, tre
     fire_kcp, '\n',
     'ADDFILE           81\n',
     'CLOSE             81\n',
-    'END\n',
     
     'Process\n\n'
   )
