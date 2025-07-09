@@ -34,8 +34,53 @@ run_name <- str_c("baseline_2020_with_fire_FVS_run",
 RunDirectory <- str_c(wd, "/", run_name)
 dir.create(RunDirectory)
 
-#Path to FlameAdjust kcp
-fire_kcp <- "C:/WFSETP_FVS/KCPs/simfire_hardcoded.kcp"
+setwd(paste0(RunDirectory))
+
+#Save the session information to record which R script was used, when, and with which package versions, to do the run
+#Generated with ChatGPT
+log_session_info <- function(script_name = NULL, log_file = "session_log.txt") {
+  # Get date
+  current_date <- Sys.Date()
+  
+  # Get session info (only package names and versions)
+  pkg_info <- sessionInfo()$otherPkgs
+  pkg_versions <- sapply(pkg_info, function(pkg) paste(pkg$Package, pkg$Version))
+  
+  # Determine script name
+  if (is.null(script_name)) {
+    script_name <- tryCatch({
+      # Try commandArgs() for command-line execution
+      args <- commandArgs(trailingOnly = FALSE)
+      script_path <- sub("--file=", "", args[grep("--file=", args)])
+      if (length(script_path) > 0) {
+        basename(script_path)
+      } else if (requireNamespace("rstudioapi", quietly = TRUE) &&
+                 rstudioapi::isAvailable()) {
+        # If in RStudio, use the active document name
+        rstudioapi::getActiveDocumentContext()$path |>
+          basename()
+      } else {
+        "Unknown_Script"
+      }
+    }, error = function(e) "Unknown_Script")
+  }
+  
+  # Compose the log text
+  log_text <- c(
+    paste0("Date: ", current_date),
+    paste0("Script: ", script_name),
+    "Package Versions:",
+    pkg_versions,
+    ""  # Blank line for spacing
+  )
+  
+  # Write to file (append mode)
+  con <- file(log_file, open = "a")  # Open in append mode
+  writeLines(log_text, con = con)
+  close(con)
+}
+
+log_session_info()
 
 #Create a table of FSim fire scenario parameters (flame lengths and associated fuel moisture and weather conditions)
 FSim_scenarios <- data.frame(
@@ -54,6 +99,75 @@ FSim_scenarios <- data.frame(
   per_stand_burned = c(70, 80, 90, 90, 100, 100),
   season = rep(3, 6)
 )
+
+                            create_fire_kcp_files <- function(params_df, output_dir = "./fire_kcps", base_filename = "FlameAdjust") {
+  if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
+  
+  for (i in seq_len(nrow(params_df))) {
+    p <- params_df[i, ]
+    
+    # Build the kcp text with hardcoded values
+    kcp_text <- paste0(
+      "!! Auto-generated fire KCP file based on scenario ", i, "\n",
+      "!! Variables hard-coded from parameters\n\n",
+
+      "*Keyword | Field 1 | Field 2 | Field 3 | Field 4 | Field 5 | Field 6 | Field 7 |\n",
+      "* -------+---------+---------+---------+---------+---------+---------+---------+\n",
+
+      "COMPUTE           0\n",
+      "FLEN = ", p$flame_length, "\n",
+      "CPC = 0  \n",
+      "PCHt2Lv = TmpHt2Lv\n",
+      "CBH=CRBASEHT\n",
+      "TmpHt2Lv = CBH\n",
+      "PCCBD=TmpCBD\n",
+      "CBD=CRBULKDN\n",
+      "TmpCBD=CBD\n",
+      "HSM = 6.026 * (FLEN / 3.2808) ** 1.4466\n",
+      "HS_ = HSM * 3.2808\n",
+      "END\n\n",
+      
+      "IF                0\n",
+      "PCCBD GT 0.0001\n",
+      "THEN\n",
+      "COMPUTE           0\n",
+      "Io_ = (0.010 * PCHt2Lv * 0.3048 * (460.0 + 25.9 * 100)) ** (3 / 2)\n",
+      "FLCRIT = (0.07749 * Io_ ** 0.46) * 3.281\n",
+      "FLCRIT2 = 0.3 * BTOPHT\n",
+      "FSLOPE = 0.9 / (FLCRIT2 - FLCRIT)\n",
+      "NTERCEPT = 1.0 - (FSLOPE * FLCRIT2)\n",
+      "Y_ = MAX((FLEN * FSLOPE + NTERCEPT), 0.0)\n",
+      "YSQRT = SQRT(Y_)\n",
+      "fplace = maxindex(FLEN, FLCRIT)\n",
+      "CPC = (INDEX(fplace, MIN(YSQRT, 1), 0)) * 100\n",
+      "Done = 1\n",
+      "END\n",
+      "ENDIF\n\n",
+      
+      "FMIN\n",
+      "!! Fuel moisture by size class\n",
+      "!!moisture     year       1hr      10hr     100hr    1000hr      duff   lvwoody    lvherb\n",
+      "MOISTURE          ", p$fire_year, "         ",
+      p$fm1, "         ", p$fm10, "       ", p$fm100, "       ",
+      p$fm1000, "        ", p$fmduff, "      ", p$fmlwood, "      ", p$fmlherb, "\n",
+      "!! Flame adjustment inputs for flame length scenario\n",
+      "FLAMEADJ          ", p$fire_year, "     PARMS(1.0, ", p$flame_length, ", CPC, HS_)\n",
+      "!!simfire      year   wind(mph)  moisture    temp(F)  mortality  %burned   season\n",
+      "SIMFIRE           ", p$fire_year, "         ",
+      p$wspd_mph, "         ", p$moisture, "         ", p$temp_F, "        ", p$mortality, "       ", p$per_stand_burned, "         ", p$season, "\n",
+      "END\n"
+    )
+    
+    # Write to file
+    kcp_filename <- file.path(output_dir, paste0(base_filename, "_", p$flame_length, ".kcp"))
+    writeLines(kcp_text, con = kcp_filename)
+  }
+}
+
+create_fire_kcp_files(FSim_scenarios)
+
+#Paths to kcps
+fire_kcps <- list.files(paste0(RunDirectory, "/fire_kcps"), full.names = TRUE)
 
 createInputFile_no_trt_fire <- function(stand, managementID, params_row, outputDatabase, areaSpecificKcp, inputDatabase) {
   paste0(
