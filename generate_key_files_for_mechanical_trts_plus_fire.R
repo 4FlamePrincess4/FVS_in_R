@@ -165,90 +165,6 @@ createInputFile <- function(stand, managementID, params_row, outputDatabase, tre
   )
 }
 
-##--------createInputFiles_no_fire
-createInputFile_no_trt <- function(stand, managementID, outputDatabase, inputDatabase) {
-  paste0(
-    'STDIDENT\n', stand, '\n',
-    'STANDCN\n', stand, '\n',
-    'MGMTID\n', managementID, '\n',
-    'NUMCYCLE       3\n',
-    'TIMEINT         0        1\n',
-    'SCREEN\n',
-    'DataBase\n',
-    'DSNout\n', outputDatabase, '\n',
-    'SUMMARY\n',
-    'COMPUTDB\n',
-    'CALBSTDB\n',
-    
-    # ---- Report Database Output ----
-    'BURNREDB\n',
-    'CARBREDB\n',
-    'DWDCVDB\n',
-    'FUELREDB\n',
-    'FUELSOUT\n',
-    'MORTREDB\n',
-    'POTFIRDB\n',
-    'SNAGOUDB\n',
-    'SNAGSUDB\n',
-    'STRCLSDB          2\n',
-    'CutLiDB           2         2\n',
-    'TreeLiDB          2         2\n',
-    'End\n',
-    
-    # ---- Input DB Queries ----
-    'DATABASE\n',
-    'DSNIN\n', inputDatabase, '\n',
-    'StandSQL\n',
-    "SELECT * FROM FVS_StandInit\n",
-    "WHERE  Stand_ID  = '%stand_cn%'\n",
-    'EndSQL\n',
-    'DSNIN\n', inputDatabase, '\n',
-    'TreeSQL\n',
-    'SELECT * FROM FVS_TreeInit\n',
-    'WHERE Stand_ID = (SELECT Stand_ID FROM FVS_StandInit\n',
-    "WHERE Stand_ID = '%stand_cn%')\n",
-    'EndSQL\n',
-    'END\n',
-    
-    # ---- COMPUTE block with scenario inputs ----
-    'COMPUTE            0\n',
-    'SEV_FL = POTFLEN(1)\n',
-    'MOD_FL = POTFLEN(2)\n',
-    'scenario = 1\n',
-    'CC = acancov\n',
-    'FML = fuelmods(1,1)\n',
-    'CHT = ATOPHT\n',
-    'CBH = crbaseht\n',
-    'CBD = crbulkdn\n',
-    'YR = year\n',
-    'END\n',
-    
-    # ---- Fire Reports ----
-    'FMIN\n',
-    'BURNREPT\n',
-    'CanFProf\n',
-    'CarbRept\n',
-    'DWDCvOut\n',
-    'FUELREPT\n',
-    'FUELOUT\n',
-    'MORTREPT\n',
-    'POTFIRE\n',
-    'SNAGOUT\n',
-    'SNAGSUM\n',
-    'FIRECALC           0         1         2\n',
-    'END\n',
-    
-    # ---- Tree outputs and classification ----
-    'TreeList        1\n',
-    'TreeList        2\n',
-    'CALBSTAT\n',
-    'CutList\n',
-    'STRCLASS           1     30.00        5.       16.     20.00       50.     35.00\n',
-    
-    'Process\n\n'
-  )
-}
-
 write_keywords_parallel <- function(database_path, FSim_scenarios, treat_kcps, fire_kcps) {
   # Load stand data once
   con <- DBI::dbConnect(RSQLite::SQLite(), database_path)
@@ -317,53 +233,6 @@ write_keywords_parallel <- function(database_path, FSim_scenarios, treat_kcps, f
   })
 }
 
-write_keywords_no_trt <- function(database_path){
-  #Connect to the database and extract the FVS_STANDINIT table
-  con <- dbConnect(SQLite(), database_path)
-  standinit <- dbReadTable(con, "FVS_STANDINIT")
-  dbDisconnect(con)
-  
-  #Create the stand list - fields should be Stand_ID, Variant, and kcp
-  standlist <- data.table::data.table(Stand_ID = standinit$Stand_ID,
-                                      Variant = standinit$Variant)
-  #Create a key label 
-  treat_key <- "Scenario_FL0"
-  
-  #Character vector to store the key file text before appending STOP
-  key_text_all <- character()
-  
-  for(j in seq_len(nrow(standinit))){
-    key_text_all <- c(
-      #Create keywords for each unique combination of kcp & variant
-      #Append to the character vector
-      createInputFile_no_trt(stand = standlist$Stand_ID, 
-                             managementID = standlist$Stand_ID, 
-                             outputDatabase = paste0("./outputs/FL0_EC.db"), 
-                             inputDatabase = database_path)
-    )
-  }
-  
-  #Append STOP
-  key_text_all <- c(key_text_all, "STOP\n")
-  
-  # Write output
-  key_file <- file.path(RunDirectory, paste0(scenario_id, ".key"))
-  in_file <- file.path(RunDirectory, paste0(scenario_id, ".in"))
-  
-  writeLines(key_text_all, key_file)
-  
-  fvs_in <- paste0(
-    scenario_id, ".key\n",
-    scenario_id, ".fvs\n",
-    scenario_id, ".out\n",
-    scenario_id, ".trl\n",
-    scenario_id, ".sum\n"
-  )
-  
-  writeLines(fvs_in, in_file)
-} #End function to write key and in files
-
-
 #Write the .key files using the above functions
 write_keywords_no_trt(EC_dbs)
 #Write the scenario .key files in parallel
@@ -377,7 +246,6 @@ variants <- "ec"
 kcps <- "simfire_hardcoded"
 flame_lengths <- c(1, 3, 5, 7, 10, 20)
 runs <- expand.grid(variant = variants, kcp = kcps, flame_length = flame_lengths)
-runs <- rbind(runs, c("ec", NA, 0))
 print(runs)
 
 #Make an outputs directory
